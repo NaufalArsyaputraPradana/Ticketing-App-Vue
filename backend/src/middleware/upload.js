@@ -3,11 +3,16 @@ const path = require('path');
 const fs = require('fs');
 
 // Ensure upload directory exists
-const uploadDir = path.join(__dirname, '../../public/uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
+const isVercel = process.env.VERCEL === '1' || process.env.VERCEL;
+const uploadDir = isVercel ? '/tmp' : path.join(__dirname, '../../public/uploads');
 
+try {
+  if (!isVercel && !fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+} catch (error) {
+  console.warn('Gagal membuat folder uploads (biasanya karena Vercel Read-Only):', error.message);
+}
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, uploadDir);
