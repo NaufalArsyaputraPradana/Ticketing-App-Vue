@@ -1,0 +1,230 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         Int       @id @default(autoincrement())
+  name       String
+  email      String    @unique
+  password   String
+  phone      String?
+  role       String    @default("user") // admin, organizer, user
+  avatar     String?
+  is_active  Boolean   @default(true)
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+
+  events       Event[]
+  transactions Transaction[]
+  withdrawals  Withdrawal[]
+  reviews      Review[]
+  favorites    Favorite[]
+  promo_codes  PromoCode[]
+  bank_accounts OrganizerBankAccount[]
+
+  @@map("users")
+}
+
+model EventCategory {
+  id         Int      @id @default(autoincrement())
+  name       String   @unique
+  icon       String?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  events     Event[]
+
+  @@map("event_categories")
+}
+
+model Event {
+  id             Int       @id @default(autoincrement())
+  organizer_id   Int
+  category_id    Int
+  title          String
+  slug           String    @unique
+  description    String    @db.Text
+  venue_name     String?
+  venue_address  String?   @db.Text
+  city           String?
+  latitude       Decimal?
+  longitude      Decimal?
+  start_date     DateTime
+  end_date       DateTime
+  banner_image   String?
+  status         String    @default("draft") // draft, published, ongoing, completed, cancelled
+  is_featured    Boolean   @default(false)
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+
+  organizer      User            @relation(fields: [organizer_id], references: [id], onDelete: Cascade)
+  category       EventCategory   @relation(fields: [category_id], references: [id], onDelete: Restrict)
+  
+  ticket_categories TicketCategory[]
+  reviews           Review[]
+  favorites         Favorite[]
+  promo_codes       PromoCode[]
+
+  @@map("events")
+}
+
+model TicketCategory {
+  id          Int      @id @default(autoincrement())
+  event_id    Int
+  name        String
+  description String?  @db.Text
+  price       Decimal  @db.Decimal(10, 2)
+  quota       Int
+  sold        Int      @default(0)
+  sale_start  DateTime?
+  sale_end    DateTime?
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  event       Event    @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  
+  transaction_items TransactionItem[]
+
+  @@map("ticket_categories")
+}
+
+model Transaction {
+  id             Int       @id @default(autoincrement())
+  user_id        Int
+  booking_code   String    @unique
+  total_amount   Decimal   @db.Decimal(10, 2)
+  payment_method String?
+  payment_status String    @default("pending") // pending, paid, failed, refunded
+  payment_proof  String?
+  paid_at        DateTime?
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+  promo_code_id  Int?
+  discount_amount Decimal? @db.Decimal(10, 2)
+
+  user           User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  promo_code     PromoCode? @relation(fields: [promo_code_id], references: [id], onDelete: SetNull)
+  
+  items          TransactionItem[]
+
+  @@map("transactions")
+}
+
+model TransactionItem {
+  id                 Int      @id @default(autoincrement())
+  transaction_id     Int
+  ticket_category_id Int
+  holder_name        String?
+  holder_email       String?
+  quantity           Int      @default(1)
+  subtotal           Decimal  @db.Decimal(10, 2)
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  transaction        Transaction    @relation(fields: [transaction_id], references: [id], onDelete: Cascade)
+  ticket_category    TicketCategory @relation(fields: [ticket_category_id], references: [id], onDelete: Restrict)
+  
+  tickets            Ticket[]
+
+  @@map("transaction_items")
+}
+
+model Ticket {
+  id                  Int       @id @default(autoincrement())
+  transaction_item_id Int
+  ticket_code         String    @unique
+  status              String    @default("active") // active, used, expired, cancelled
+  checked_in_at       DateTime?
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @updatedAt
+
+  transaction_item    TransactionItem @relation(fields: [transaction_item_id], references: [id], onDelete: Cascade)
+
+  @@map("tickets")
+}
+
+model Withdrawal {
+  id             Int      @id @default(autoincrement())
+  organizer_id   Int
+  amount         Decimal  @db.Decimal(10, 2)
+  bank_name      String
+  account_number String
+  account_name   String
+  status         String   @default("pending") // pending, approved, rejected
+  admin_note     String?  @db.Text
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  organizer      User     @relation(fields: [organizer_id], references: [id], onDelete: Cascade)
+
+  @@map("withdrawals")
+}
+
+model Review {
+  id         Int      @id @default(autoincrement())
+  user_id    Int
+  event_id   Int
+  rating     Int      // 1-5
+  comment    String?  @db.Text
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  event      Event    @relation(fields: [event_id], references: [id], onDelete: Cascade)
+
+  @@map("reviews")
+}
+
+model Favorite {
+  id         Int      @id @default(autoincrement())
+  user_id    Int
+  event_id   Int
+  created_at DateTime @default(now())
+
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  event      Event    @relation(fields: [event_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, event_id])
+  @@map("favorites")
+}
+
+model OrganizerBankAccount {
+  id             Int      @id @default(autoincrement())
+  organizer_id   Int
+  bank_name      String
+  account_number String
+  account_name   String
+  is_active      Boolean  @default(true)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  organizer      User     @relation(fields: [organizer_id], references: [id], onDelete: Cascade)
+
+  @@map("organizer_bank_accounts")
+}
+
+model PromoCode {
+  id              Int      @id @default(autoincrement())
+  organizer_id    Int
+  event_id        Int?     // If null, applies to all events by this organizer
+  code            String   @unique
+  discount_type   String   @default("percentage") // percentage, fixed
+  discount_value  Decimal  @db.Decimal(10, 2)
+  valid_from      DateTime?
+  valid_until     DateTime?
+  usage_limit     Int?
+  used_count      Int      @default(0)
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  organizer       User     @relation(fields: [organizer_id], references: [id], onDelete: Cascade)
+  event           Event?   @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  transactions    Transaction[]
+
+  @@map("promo_codes")
+}
